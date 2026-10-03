@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SafeSense IoT - Environmental Safety & Fire/Gas Monitoring System</title>
+  
+  <!-- Chart.js for Live Wave Graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Feather Icons CDN for crisp UI icons -->
+  <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+  
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- HEADER BAR -->
+  <header class="main-header">
+    <div class="brand-section">
+      <div class="brand-logo">
+        <i data-feather="shield"></i>
+      </div>
+      <div>
+        <div class="brand-title">SafeSense IoT</div>
+        <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 500;">ENVIRONMENTAL SAFETY MONITOR</div>
+      </div>
+    </div>
+
+    <!-- Status Pills -->
+    <div class="header-status-pills">
+      <div class="status-pill online">
+        <span class="pulse-dot"></span>
+        <span id="headerSysStatus">SYSTEM ONLINE</span>
+      </div>
+      <div class="status-pill mqtt-ok" id="mqttPill">
+        <i data-feather="wifi" style="width: 14px; height: 14px;"></i>
+        <span id="mqttStatusText">MQTT: CONNECTED</span>
+      </div>
+      <div class="status-pill demo" id="demoPill" onclick="app.toggleDemoMode()">
+        <i data-feather="cpu" style="width: 14px; height: 14px;"></i>
+        <span id="demoText">DEMO SIMULATOR ACTIVE</span>
+      </div>
+    </div>
+
+    <!-- Header Controls & Clock -->
+    <div class="header-controls">
+      <div class="live-clock" id="liveClock">10:42:00 AM</div>
+
+      <!-- Quick Test Emergency Trigger Button -->
+      <button class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; border-color: rgba(239, 68, 68, 0.4); color: var(--unsafe-red);" onclick="app.injectDemoSpike('gas')">
+        <i data-feather="alert-triangle" style="width: 14px; height: 14px;"></i> Test Spike
+      </button>
+
+      <!-- Notification Bell -->
+      <div class="icon-btn" id="notifBellBtn" onclick="app.toggleNotifDrawer()">
+        <i data-feather="bell"></i>
+        <div class="badge-count" id="notifBadgeCount">1</div>
+      </div>
+
+      <div class="icon-btn" onclick="app.navigate('settings')">
+        <i data-feather="settings"></i>
+      </div>
+    </div>
+  </header>
+
+  <div id="app-layout">
+    
+    <!-- SIDEBAR NAVIGATION -->
+    <nav class="sidebar-nav">
+      <div class="nav-group">
+        <a class="nav-link active" data-view="dashboard" onclick="app.navigate('dashboard')">
+          <i data-feather="grid"></i>
+          <span>Dashboard</span>
+        </a>
+        <a class="nav-link" data-view="waves" onclick="app.navigate('waves')">
+          <i data-feather="activity"></i>
+          <span>Live Waves</span>
+        </a>
+        <a class="nav-link" data-view="safety-circle" onclick="app.navigate('safety-circle')">
+          <i data-feather="disc"></i>
+          <span>Safety Circle</span>
+        </a>
+        <a class="nav-link" data-view="nodes" onclick="app.navigate('nodes')">
+          <i data-feather="cpu"></i>
+          <span>Sensor Nodes</span>
+        </a>
+        <a class="nav-link" data-view="alerts" onclick="app.navigate('alerts')">
+          <i data-feather="alert-octagon"></i>
+          <span>Alert History</span>
+        </a>
+        <a class="nav-link" data-view="chat" onclick="app.navigate('chat')">
+          <i data-feather="message-square"></i>
+          <span>AI Assistant</span>
+        </a>
+        <a class="nav-link" data-view="settings" onclick="app.navigate('settings')">
+          <i data-feather="sliders"></i>
+          <span>Settings</span>
+        </a>
+      </div>
+
+      <div style="padding: 0.75rem; border-top: 1px solid var(--border-color); font-size: 0.72rem; color: var(--text-dim);">
+        <div>Node Bridge: v1.0.0</div>
+        <div id="lastDataAge">Last recv: 1s ago</div>
+      </div>
+    </nav>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="main-content">
+
+      <!-- ==================================================== -->
+      <!-- 1. MAIN DASHBOARD VIEW -->
+      <!-- ==================================================== -->
+      <section id="view-dashboard" class="page-view active">
+        <div class="page-header">
+          <div>
+            <h1>Environmental Safety Monitoring</h1>
+            <p>Real-time telemetry feeds from ESP32 multi-node IoT sensor network</p>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-muted);">
+            Active Nodes: <strong style="color: white;" id="dashActiveNodes">3 ESP32 Nodes</strong>
+          </div>
+        </div>
+
+        <!-- 2. SAFE / UNSAFE CENTRAL SAFETY STATUS PANEL -->
+        <div class="safety-status-panel status-safe" id="centralSafetyPanel">
+          <div class="status-info-box">
+            <div class="status-big-icon" id="statusBigIcon">
+              ✓
+            </div>
+            <div>
+              <div class="status-text-title" id="statusTitle">✓ SYSTEM SAFE</div>
+              <div class="status-text-sub" id="statusSubtitle">All environmental parameter readings are within safe calibrated limits.</div>
+              <div class="sensor-summary-chips" id="statusChips">
+                <span class="chip chip-safe">Temp: SAFE</span>
+                <span class="chip chip-safe">Humidity: SAFE</span>
+                <span class="chip chip-safe">Gas/Smoke: SAFE</span>
+                <span class="chip chip-safe">Flame: SAFE</span>
+              </div>
+            </div>
+          </div>
+          <div class="status-actions">
+            <button class="btn btn-outline" onclick="app.navigate('waves')">
+              <i data-feather="bar-chart-2"></i> View Details
+            </button>
+            <button class="btn btn-primary" id="ackAlertBtn" style="display: none;" onclick="emergencyEngine.acknowledgeCurrentAlert()">
+              <i data-feather="check-circle"></i> Acknowledge Alert
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 CORE SENSOR CARDS -->
+        <div class="sensor-cards-grid">
+          
+          <!-- Card 1: Temperature -->
+          <div class="glass-card sensor-card" id="cardTemp">
+            <div class="sensor-card-header">
+              <div class="sensor-title-group">
+                <div class="sensor-icon"><i data-feather="thermometer"></i></div>
+                <div class="sensor-name">TEMPERATURE</div>
+              </div>
+              <span class="status-badge safe" id="badgeTemp">SAFE</span>
+            </div>
+
+            <div class="sensor-value-body">
+              <div class="sensor-main-value" id="valTemp">26.4</div>
+              <div class="sensor-unit">°C</div>
+            </div>
+
+            <div class="threshold-progress-bar">
+              <div class="threshold-progress-fill" id="progressTemp" style="width: 45%; background-color: var(--safe-green);"></div>
+            </div>
+            <div class="threshold-labels">
+              <span>Safe: &le; 32°C</span>
+              <span>Warn: 40°C</span>
+            </div>
+
+            <div class="mini-graph-container">
+              <canvas id="miniChartTemp"></canvas>
+            </div>
+
+            <div class="sensor-card-footer">
+              <span>Sensor: DHT22</span>
+              <span id="timeTemp">Updated 1s ago</span>
+            </div>
+          </div>
+
+          <!-- Card 2: Humidity -->
+          <div class="glass-card sensor-card" id="cardHum">
+            <div class="sensor-card-header">
+              <div class="sensor-title-group">
+                <div class="sensor-icon"><i data-feather="droplet"></i></div>
+                <div class="sensor-name">HUMIDITY</div>
+              </div>
+              <span class="status-badge safe" id="badgeHum">SAFE</span>
+            </div>
+
+            <div class="sensor-value-body">
+              <div class="sensor-main-value" id="valHum">52.0</div>
+              <div class="sensor-unit">%</div>
+            </div>
+
+            <div class="threshold-progress-bar">
+              <div class="threshold-progress-fill" id="progressHum" style="width: 52%; background-color: var(--safe-green);"></div>
+            </div>
+            <div class="threshold-labels">
+              <span>Safe Range: 30 - 70%</span>
+              <span>Warn: &gt; 70%</span>
+            </div>
+
+            <div class="mini-graph-container">
+              <canvas id="miniChartHum"></canvas>
+            </div>
+
+            <div class="sensor-card-footer">
+              <span>Sensor: DHT22</span>
+              <span id="timeHum">Updated 1s ago</span>
+            </div>
+          </div>
+
+          <!-- Card 3: Gas / Smoke -->
+          <div class="glass-card sensor-card" id="cardGas">
+            <div class="sensor-card-header">
+              <div class="sensor-title-group">
+                <div class="sensor-icon"><i data-feather="wind"></i></div>
+                <div class="sensor-name">GAS / SMOKE</div>
+              </div>
+              <span class="status-badge safe" id="badgeGas">SAFE</span>
+            </div>
+
+            <div class="sensor-value-body">
+              <div class="sensor-main-value" id="valGas">310</div>
+              <div class="sensor-unit">PPM</div>
+            </div>
+
+            <div class="threshold-progress-bar">
+              <div class="threshold-progress-fill" id="progressGas" style="width: 31%; background-color: var(--safe-green);"></div>
+            </div>
+            <div class="threshold-labels">
+              <span>Safe: &le; 450 PPM</span>
+              <span>Unsafe: &gt; 650 PPM</span>
+            </div>
+
+            <div class="mini-graph-container">
+              <canvas id="miniChartGas"></canvas>
+            </div>
+
+            <div class="sensor-card-footer">
+              <span>Sensor: MQ2 / MQ9</span>
+              <span id="timeGas">Updated 1s ago</span>
+            </div>
+          </div>
+
+          <!-- Card 4: Flame / Fire -->
+          <div class="glass-card sensor-card" id="cardFlame">
+            <div class="sensor-card-header">
+              <div class="sensor-title-group">
+                <div class="sensor-icon"><i data-feather="zap"></i></div>
+                <div class="sensor-name">FLAME / FIRE</div>
+              </div>
+              <span class="status-badge safe" id="badgeFlame">SAFE</span>
+            </div>
+
+            <div class="sensor-value-body">
+              <div class="sensor-main-value" id="valFlame" style="font-size: 1.5rem;">NO FLAME</div>
+              <div class="sensor-unit">IR State</div>
+            </div>
+
+            <div class="threshold-progress-bar">
+              <div class="threshold-progress-fill" id="progressFlame" style="width: 0%; background-color: var(--safe-green);"></div>
+            </div>
+            <div class="threshold-labels">
+              <span>Safe: FALSE</span>
+              <span>Emergency: TRUE</span>
+            </div>
+
+            <div class="mini-graph-container">
+              <canvas id="miniChartFlame"></canvas>
+            </div>
+
+            <div class="sensor-card-footer">
+              <span>Sensor: IR Flame</span>
+              <span id="timeFlame">Updated 1s ago</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- 4. WAVE LINE MONITOR PAGE -->
+      <!-- ==================================================== -->
+      <section id="view-waves" class="page-view">
+        <div class="page-header">
+          <div>
+            <h1>Live Wave Monitor</h1>
+            <p>Real-time scrolling waveform analysis with threshold reference zone lines</p>
+          </div>
+          
+          <div class="filter-btn-group">
+            <button class="filter-btn active" onclick="waveMonitor.setTimeFilter('1m', this)">1 Min</button>
+            <button class="filter-btn" onclick="waveMonitor.setTimeFilter('5m', this)">5 Min</button>
+            <button class="filter-btn" onclick="waveMonitor.setTimeFilter('30m', this)">30 Min</button>
+            <button class="filter-btn" onclick="waveMonitor.setTimeFilter('1h', this)">1 Hour</button>
+            <button class="filter-btn" onclick="waveMonitor.setTimeFilter('24h', this)">24 Hours</button>
+          </div>
+        </div>
+
+        <!-- Gas Wave Graph -->
+        <div class="glass-card wave-graph-card">
+          <div class="wave-graph-header">
+            <h3><i data-feather="wind" style="color: var(--cyan-accent); margin-right: 0.5rem;"></i> Gas & Smoke Concentration Waveform (PPM)</h3>
+            <div class="wave-legend">
+              <div class="legend-item"><div class="legend-color" style="background: var(--safe-green);"></div> Safe (&le; 450)</div>
+              <div class="legend-item"><div class="legend-color" style="background: var(--warning-yellow);"></div> Warning (450-650)</div>
+              <div class="legend-item"><div class="legend-color" style="background: var(--unsafe-red);"></div> Unsafe (&gt; 650)</div>
+              <div class="legend-item"><div class="legend-color" style="background: white;"></div> Actual Reading</div>
+            </div>
+          </div>
+          <div style="height: 280px; width: 100%;">
+            <canvas id="waveChartGas"></canvas>
+          </div>
+        </div>
+
+        <!-- Temperature & Humidity Wave Graph -->
+        <div class="glass-card wave-graph-card">
+          <div class="wave-graph-header">
+            <h3><i data-feather="thermometer" style="color: var(--warning-yellow); margin-right: 0.5rem;"></i> Temperature (°C) Waveform</h3>
+            <div class="wave-legend">
+              <div class="legend-item"><div class="legend-color" style="background: var(--safe-green);"></div> Safe Threshold (32°C)</div>
+              <div class="legend-item"><div class="legend-color" style="background: var(--unsafe-red);"></div> Unsafe Threshold (40°C)</div>
+            </div>
+          </div>
+          <div style="height: 250px; width: 100%;">
+            <canvas id="waveChartTemp"></canvas>
+          </div>
+        </div>
+
+        <!-- 8. IMPORTANT THRESHOLD DISCLAIMER NOTE -->
+        <div class="threshold-disclaimer-box">
+          <div class="disclaimer-icon"><i data-feather="alert-triangle"></i></div>
+          <div class="disclaimer-text">
+            <h4>⚠ SAFETY NOTE</h4>
+            <p>The green, yellow and red zones shown on this dashboard are configured monitoring thresholds. If a reading exceeds the configured unsafe threshold, the system will classify the reading as UNSAFE and generate an emergency alert. Thresholds should be calibrated according to the actual sensor, environment and safety requirements.</p>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- 5. CIRCULAR / RADAR SAFETY VIEW -->
+      <!-- ==================================================== -->
+      <section id="view-safety-circle" class="page-view">
+        <div class="page-header">
+          <div>
+            <h1>Safety Wave Circle</h1>
+            <p>360° dynamic environmental radar visualization & dynamic safety score</p>
+          </div>
+        </div>
+
+        <div class="glass-card safety-circle-wrapper">
+          <div class="radar-canvas-container">
+            <canvas id="radarCanvas" width="380" height="380"></canvas>
+            
+            <div class="center-score-box" id="radarCenterBox">
+              <div class="center-score-value" id="radarScoreVal">98</div>
+              <div class="center-score-label">SAFETY SCORE</div>
+            </div>
+          </div>
+
+          <div class="circle-sensor-readouts" id="radarReadoutsGrid">
+            <!-- Dynamic readouts inserted via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- 9. SENSOR NODE VIEW -->
+      <!-- ==================================================== -->
+      <section id="view-nodes" class="page-view">
+        <div class="page-header">
+          <div>
+            <h1>Sensor Nodes Management</h1>
+            <p>ESP32 hardware node telemetry, packet timestamps & connection health</p>
+          </div>
+        </div>
+
+        <div class="nodes-grid" id="nodesGridContainer">
+          <!-- Dynamic ESP32 Node cards rendered here -->
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- 10. ALERT HISTORY PAGE -->
+      <!-- ==================================================== -->
+      <section id="view-alerts" class="page-view">
+        <div class="page-header">
+          <div>
+            <h1>Alert History Log</h1>
+            <p>Auditable security log of all past warning and unsafe environmental alerts</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem;">
+            <select class="form-field" id="alertFilterNode" onchange="alertHistory.loadAlerts()" style="padding: 0.4rem; background: var(--bg-card); color: white; border: 1px solid var(--border-color); border-radius: 8px;">
+              <option value="ALL">All Nodes</option>
+              <option value="ESP32-Node-01">ESP32-Node-01</option>
+              <option value="ESP32-Node-02">ESP32-Node-02</option>
+              <option value="ESP32-Node-03">ESP32-Node-03</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <div class="table-responsive">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Node ID</th>
+                  <th>Sensor</th>
+                  <th>Reading</th>
+                  <th>Threshold</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="alertTableBody">
+                <!-- Loaded via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- 6 & 7. NESTED CHATBOT & AI WAVE ANALYSIS UI -->
+      <!-- ==================================================== -->
+      <section id="view-chat" class="page-view">
+        <div class="page-header">
+          <div>
+            <h1>AI Safety Assistant</h1>
+            <p>Interactive intelligent assistant with multi-level telemetry analysis</p>
+          </div>
+        </div>
+
+        <div class="glass-card chatbot-container">
+          
+          <!-- Hierarchical Tabs -->
+          <div class="chat-level-tabs">
+            <button class="chat-tab active" data-level="safety" onclick="aiChat.switchLevel('safety', this)">
+              <i data-feather="shield"></i> Safety Assistant
+            </button>
+            <button class="chat-tab" data-level="sensor" onclick="aiChat.switchLevel('sensor', this)">
+              <i data-feather="cpu"></i> Sensor Assistant
+            </button>
+            <button class="chat-tab" data-level="wave" onclick="aiChat.switchLevel('wave', this)">
+              <i data-feather="activity"></i> Wave Analysis Assistant
+            </button>
+          </div>
+
+          <!-- Messages Container -->
+          <div class="chat-messages-box" id="chatMessages">
+            <div class="chat-bubble bot">
+              Hello! I am your SafeSense AI Safety Assistant. Ask me about overall system safety, current gas/temperature readings, or waveform threshold trends!
+            </div>
+          </div>
+
+          <!-- Input Bar -->
+          <form class="chat-input-bar" id="chatForm" onsubmit="aiChat.sendMessage(event)">
+            <input type="text" id="chatInput" placeholder="Ask questions e.g. 'Is everything safe?', 'Why is gas red?'..." required>
+            <button type="submit" class="btn btn-primary">
+              <i data-feather="send"></i>
+            </button>
+          </form>
+
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- 18. SETTINGS PAGE -->
+      <!-- ==================================================== -->
+      <section id="view-settings" class="page-view">
+        <div class="page-header">
+          <div>
+            <h1>System Settings & Threshold Calibration</h1>
+            <p>Configure safety limits, audio/vibration preferences, and MQTT parameters</p>
+          </div>
+        </div>
+
+        <div class="glass-card settings-section">
+          <h3><i data-feather="sliders" style="margin-right: 0.5rem; color: var(--safe-green);"></i> Safety Threshold Calibration</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+            Changes here directly control when the system triggers WARNING and UNSAFE emergency alerts.
+          </p>
+
+          <form id="thresholdsForm" onsubmit="settingsManager.saveThresholds(event)">
+            <div class="form-group-grid">
+              
+              <!-- Temperature -->
+              <div class="form-field">
+                <label>Temp Safe Max (°C)</label>
+                <input type="number" id="cfgTempSafe" value="32" step="0.5" required>
+              </div>
+              <div class="form-field">
+                <label>Temp Unsafe Min (°C)</label>
+                <input type="number" id="cfgTempUnsafe" value="40" step="0.5" required>
+              </div>
+
+              <!-- Gas -->
+              <div class="form-field">
+                <label>Gas Safe Max (PPM)</label>
+                <input type="number" id="cfgGasSafe" value="450" required>
+              </div>
+              <div class="form-field">
+                <label>Gas Unsafe Min (PPM)</label>
+                <input type="number" id="cfgGasUnsafe" value="650" required>
+              </div>
+
+              <!-- Humidity -->
+              <div class="form-field">
+                <label>Humidity Safe Max (%)</label>
+                <input type="number" id="cfgHumSafe" value="70" required>
+              </div>
+              
+              <!-- Smoke -->
+              <div class="form-field">
+                <label>Smoke Unsafe Min (PPM)</label>
+                <input type="number" id="cfgSmokeUnsafe" value="400" required>
+              </div>
+            </div>
+
+            <div style="margin-top: 1.5rem;">
+              <button type="submit" class="btn btn-primary">
+                <i data-feather="save"></i> Save & Calibrate Thresholds
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="glass-card settings-section">
+          <h3><i data-feather="bell" style="margin-right: 0.5rem; color: var(--cyan-accent);"></i> Alert & Notification Preferences</h3>
+          
+          <div class="form-group-grid">
+            <div class="form-field">
+              <label>30-Minute Monitoring Summary Push</label>
+              <select id="cfgNotif30m">
+                <option value="true">Enabled (Send every 30 mins)</option>
+                <option value="false">Disabled</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Emergency Audio Synth Alarm</label>
+              <select id="cfgAudioSynth">
+                <option value="true">Enabled (5s Beep Alarm)</option>
+                <option value="false">Disabled</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Mobile Device Vibration</label>
+              <select id="cfgVibration">
+                <option value="true">Enabled (If device supported)</option>
+                <option value="false">Disabled</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <!-- SLIDE-OVER NOTIFICATION CENTER -->
+  <div class="notif-drawer" id="notifDrawer">
+    <div class="notif-header">
+      <div style="font-weight: 700; color: white;">Notifications</div>
+      <button class="icon-btn" onclick="app.toggleNotifDrawer()"><i data-feather="x"></i></button>
+    </div>
+    <div class="notif-list" id="notifDrawerList">
+      <!-- Items populated via JS -->
+    </div>
+  </div>
+
+  <!-- 13. EMERGENCY MODE OVERLAY MODAL -->
+  <div class="emergency-modal-backdrop" id="emergencyModal">
+    <div class="emergency-box">
+      <div class="emergency-icon-animated">🚨</div>
+      <div class="emergency-title">EMERGENCY ALERT</div>
+      <div class="emergency-sub">UNSAFE ENVIRONMENTAL CONDITION DETECTED</div>
+
+      <div class="emergency-details-card" id="emergencyDetailsContent">
+        <div><strong>Trigger Sensor:</strong> <span id="emgSensor">Gas / Smoke</span></div>
+        <div><strong>Breached Node:</strong> <span id="emgNode">ESP32-Node-02</span></div>
+        <div><strong>Current Reading:</strong> <span id="emgReading" style="color: var(--unsafe-red); font-weight: 800;">785 PPM</span></div>
+        <div><strong>Unsafe Threshold:</strong> <span id="emgThreshold">650 PPM</span></div>
+      </div>
+
+      <div class="emergency-actions-group">
+        <button class="btn btn-danger" onclick="emergencyEngine.silenceAlarm()">
+          <i data-feather="volume-x"></i> SILENCE ALARM
+        </button>
+        <button class="btn btn-primary" onclick="emergencyEngine.acknowledgeCurrentAlert()">
+          <i data-feather="check-square"></i> ACKNOWLEDGE & DISMISS
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FRONTEND JS MODULES -->
+  <script src="js/data-engine.js"></script>
+  <script src="js/emergency.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/wave-monitor.js"></script>
+  <script src="js/safety-circle.js"></script>
+  <script src="js/sensor-nodes.js"></script>
+  <script src="js/alert-history.js"></script>
+  <script src="js/ai-assistant.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
